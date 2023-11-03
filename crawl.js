@@ -1,4 +1,4 @@
-const {JSDOM} = require("jsdom");
+const {JSDOM, ELEMENT_NODE} = require("jsdom");
 
 function normalizeURL(url) {
 	try {
@@ -14,15 +14,37 @@ function normalizeURL(url) {
 	}
 }
 
+function getLinksInNode(node, links) {
+	for (n of node.childNodes) {
+		if (n.nodeType == 1) { 
+			if (n.nodeName == "A") {
+				links.push(n); 
+			}
+			getLinksInNode(n, links);
+		}
+	}
+	return links;
+}
+
 function getURLsFromHTML(htmlBody, baseURL) {
 	let result = [];
 	const dom = new JSDOM(htmlBody);
-	const links = dom.window.document.querySelectorAll("a")
-	for (let link of links) {
-		if (link.href.startsWith("/")) {
-			result.push(`${baseURL}${link.href.substring(1)}`);
-		} else {
-			result.push(link.href);
+	let links = getLinksInNode(dom.window.document.body, []);
+	for (const link of links) {
+		let linkURL = null;
+		try {
+			const base = 
+				link.href.startsWith("/") ?
+				new URL(baseURL).origin : 
+				(baseURL.endsWith("/") ? baseURL : baseURL+"/");
+
+			linkURL = new URL(link.href, base);
+		} catch(e) {
+			console.log(e.message);
+		}
+			
+		if (linkURL != null && !result.includes(linkURL.href)) {
+			result.push(linkURL.href);
 		}
 	}
 
@@ -30,6 +52,7 @@ function getURLsFromHTML(htmlBody, baseURL) {
 }
 
 async function crawlPage(baseURL, currentURL, pages) {
+//	if (!currentURL.endsWith("/")) currentURL += "/";
 	// TO-DO: Handle URLs with omitted protocol (https://)	
 	const nURL = normalizeURL(currentURL);
 	if (pages[nURL] != undefined) {
@@ -45,21 +68,21 @@ async function crawlPage(baseURL, currentURL, pages) {
 		response = await fetch(currentURL);
 	} catch (e) {
 		console.log(e.message);
-		return;
+		return pages;
 	}
 
 	if (!response.ok) {
-		console.log(response.status + ": " + response.statusText);
-		return;
+		console.log(response.status+" "+response.statusText+": "+currentURL);
+		return pages;
 	}
 
 	if (!response.headers.get("Content-Type").startsWith("text/html")) {
-		console.log("Invalid content type: "+response.headers.get("Content-Type"));
-		return;
+//		console.log("Invalid content type: "+response.headers.get("Content-Type"));
+		return pages;
 	}
 
 	const body = await response.text();
-	const links = getURLsFromHTML(body, baseURL);
+	const links = getURLsFromHTML(body, currentURL);
 	for (const link of links) {
 		if (link.startsWith(baseURL)) {
 			await crawlPage(baseURL, link, pages);			
