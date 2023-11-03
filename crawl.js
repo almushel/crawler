@@ -20,6 +20,32 @@ function getURLsFromHTML(htmlBody, baseURL) {
 
 	return result;
 }
+
+async function crawlPage(baseURL, dict) {
+	// TO-DO: Handle URLs with omitted protocol (https://)	
+
+	let response;
+	try {
+		response = await fetch(baseURL);
+	} catch (e) {
+		console.log(e.message);
+		return;
+	}
+
+	if (!response.ok) {
+		console.log(response.status + ": " + response.statusText);
+		return;
+	}
+
+	if (!response.headers.get("Content-Type").startsWith("text/html")) {
+		console.log("Invalid content type");
+		return;
+	}
+
+	const body = await response.text();
+	console.log(body);
+}
+
 module.exports = {
-	normalizeURL, getURLsFromHTML
+	normalizeURL, getURLsFromHTML, crawlPage
 }
